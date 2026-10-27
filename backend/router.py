@@ -1,36 +1,47 @@
-"""Few-Shot Agent Router for Single Agent Selection."""
+"""Few-Shot Agent Router with Dedicated Strategy Decision Routing."""
 
 from openai import OpenAI
 
 
 def choose_agent(user_input: str, model: str = "gpt-4o-mini") -> str:
-    """Uses few-shot prompting to classify user intent into AGENT_A, AGENT_B, or AGENT_C.
+    """Uses few-shot prompting to classify user intent into:
+    - AGENT_A: Raw current price, ticker quote, or daily change.
+    - AGENT_B: Visual chart trends, graphs, patterns, or plot analysis.
+    - AGENT_C: Book rules, trading theory, definitions, or textbook concepts.
+    - STRATEGY: Trade direction (Buy vs Sell, Call vs Put), market outlook, or actionable setups.
 
     Args:
         user_input: The user query string.
         model: OpenAI model name.
 
     Returns:
-        AGENT_A, AGENT_B, or AGENT_C.
+        AGENT_A, AGENT_B, AGENT_C, or STRATEGY.
     """
     client = OpenAI()
     few_shot_messages = [
         {
             "role": "system",
             "content": (
-                "You are an intent router. Classify the user query into exactly ONE choice:\n"
-                "- AGENT_A: For live current price, ticker quote, or daily change.\n"
-                "- AGENT_B: For visual chart trends, graphs, patterns, or plot analysis.\n"
-                "- AGENT_C: For book rules, trading theory, definitions, or textbook concepts.\n"
-                "Output ONLY the token: AGENT_A, AGENT_B, or AGENT_C."
+                "You are an intent router for a Nifty 50 market system. Classify the user query into exactly ONE token:\n"
+                "- AGENT_A: When the user only asks for the current price, quote, CMP, or daily high/low.\n"
+                "- AGENT_B: When the user explicitly asks to plot, view, or analyze the chart/graph.\n"
+                "- AGENT_C: When the user asks about textbook definitions, trading books, or indicators theory.\n"
+                "- STRATEGY: When the user asks 'should I buy or sell', 'call or put', trade direction, or market decision.\n"
+                "Output ONLY one token: AGENT_A, AGENT_B, AGENT_C, or STRATEGY."
             ),
         },
-        {"role": "user", "content": "What is the current price of Nifty today?"},
+        {"role": "user", "content": "What is the current price of Nifty?"},
         {"role": "assistant", "content": "AGENT_A"},
-        {"role": "user", "content": "Can you plot and analyze the 3-month chart for Nifty?"},
+        {"role": "user", "content": "Show me the 3-month chart and visual trend."},
         {"role": "assistant", "content": "AGENT_B"},
-        {"role": "user", "content": "What does Murphy's book say about head and shoulders patterns?"},
+        {"role": "user", "content": "What does John Murphy say about moving averages?"},
         {"role": "assistant", "content": "AGENT_C"},
+        {"role": "user", "content": "should i buy ninfty toady should i call or put"},
+        {"role": "assistant", "content": "STRATEGY"},
+        {"role": "user", "content": "should i buy or sell nifty"},
+        {"role": "assistant", "content": "STRATEGY"},
+        {"role": "user", "content": "is nifty bullish or bearish for options today?"},
+        {"role": "assistant", "content": "STRATEGY"},
         {"role": "user", "content": user_input},
     ]
 

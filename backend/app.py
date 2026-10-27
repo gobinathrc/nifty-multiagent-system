@@ -1,4 +1,4 @@
-"""FastAPI Backend Server for Render Hosting."""
+"""FastAPI Backend Server for Render Hosting with Strategy Decision Engine."""
 
 from contextlib import asynccontextmanager
 import json
@@ -10,7 +10,6 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from openai import OpenAI
 
-# Robust import resolution for both root execution (Render) and local backend/ execution
 try:
     from backend.agent_a import get_current_nifty_quote
     from backend.agent_b import agent_b_chart_vision
@@ -41,7 +40,6 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Nifty Multi-Agent API", lifespan=lifespan)
 
-# Allow Cross-Origin Resource Sharing
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -50,7 +48,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-query_cache = ResponseCache(ttl_seconds=1800)
+query_cache = ResponseCache(ttl_seconds=900)
 session_mgr = SessionManager(max_history_turns=5)
 agent_c_instance = AgentC()
 
@@ -79,33 +77,82 @@ def extract_sql_params(text: str) -> tuple[str, int]:
 
 @app.post("/api/chat")
 def chat_endpoint(req: ChatRequest):
-    """Unified API endpoint routing queries to Agent A, B, C or Dynamic SQL."""
+    """Unified API endpoint routing queries to Agent A, B, C, or STRATEGY synthesis."""
     user_input = req.message.strip()
     if not user_input:
         return {"reply": "Please enter a question.", "source": "error"}
 
-    # 1. Cache hit check (Zero Token Spend)
+    # 1. Cache hit check
     cached = query_cache.get(user_input)
     if cached:
         return {"reply": cached, "source": "cache"}
 
     client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-    # 2. Few-shot router classification
+    # 2. Intent routing
     decision = choose_agent(user_input)
 
-    if "AGENT_A" in decision:
+    # CASE 1: STRATEGY (Buy vs Sell / Call vs Put / Market Decision)
+    if "STRATEGY" in decision:
         quote = get_current_nifty_quote("^NSEI")
-        reply = f"[Agent A - Live Quote]\nNifty 50: ₹{quote['current_price']} ({quote['day_change_pct']}% today)\nHigh: ₹{quote['day_high']} | Low: ₹{quote['day_low']}"
+        chart_analysis = agent_b_chart_vision("^NSEI")
+        book_rule = agent_c_instance.consult_book(
+            "Rules for buying Call options versus Put options based on intraday high/low breakouts and trend support"
+        )
 
+        strategy_prompt = f"""
+You are a Senior Quantitative Market Strategist for Indian Equities (NSE/Nifty 50).
+The user is asking: "{user_input}"
+
+Here is real-time market data from your specialist agents:
+- LIVE INTRADAY METRICS (Agent A):
+  * Current Price: ₹{quote['current_price']}
+  * Day High (Immediate Resistance): ₹{quote['day_high']}
+  * Day Low (Immediate Support): ₹{quote['day_low']}
+  * Today's Change: {quote['day_change_pct']}%
+
+- 3-MONTH CHART & VISUAL TREND (Agent B):
+{chart_analysis}
+
+- TECHNICAL ANALYSIS LITERATURE & RULES (Agent C - John J. Murphy):
+{book_rule}
+
+TASK:
+Directly answer whether the market bias favors BUY (Call/CE) or SELL (Put/PE):
+1. **Executive Bias**: State clearly whether bias is Bullish (Call), Bearish (Put), or Neutral/Range-Bound.
+2. **Call (CE) Setup**: Specific breakout level (e.g. above Day High ₹{quote['day_high']}) and target.
+3. **Put (PE) Setup**: Specific breakdown level (e.g. below Day Low ₹{quote['day_low']}) and target.
+4. **Key Risk & Stop-Loss Level**: Based on today's range.
+
+Keep it concise, actionable, and structured with bullet points.
+"""
+        resp = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": strategy_prompt}],
+            max_tokens=450,
+            temperature=0.2,
+        )
+        reply = f"[Strategic Market Setup]\n" + resp.choices[0].message.content.strip()
+
+    # CASE 2: AGENT A (Raw Price / Ticker Quote)
+    elif "AGENT_A" in decision:
+        quote = get_current_nifty_quote("^NSEI")
+        reply = (
+            f"[Agent A - Live Quote]\n"
+            f"Nifty 50: ₹{quote['current_price']} ({quote['day_change_pct']}% today)\n"
+            f"High: ₹{quote['day_high']} | Low: ₹{quote['day_low']}"
+        )
+
+    # CASE 3: AGENT B (Explicit Chart/Plot Request)
     elif "AGENT_B" in decision:
         reply = f"[Agent B - Vision Plot]\n{agent_b_chart_vision('^NSEI')}"
 
+    # CASE 4: AGENT C (Textbook & Literature Concepts)
     elif "AGENT_C" in decision:
         reply = f"[Agent C - Book Theory]\n{agent_c_instance.consult_book(user_input)}"
 
+    # CASE 5: DYNAMIC SQL FALLBACK
     else:
-        # Dynamic SQL Fallback
         col, days = extract_sql_params(user_input)
         sql_rows = query_market_sql(column=col, days=days)
         session_mgr.add_user_message(req.session_id, user_input)
