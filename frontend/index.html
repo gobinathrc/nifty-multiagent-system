@@ -7,6 +7,8 @@
   <link rel="stylesheet" href="styles.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <!-- Markdown parser to cleanly render bold, bullets, and headings without raw ### and *** -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 </head>
 <body>
   <div class="glass-container">
@@ -23,6 +25,7 @@
         <span class="badge badge-a">Agent A: Live</span>
         <span class="badge badge-b">Agent B: Vision</span>
         <span class="badge badge-c">Agent C: Theory</span>
+        <span class="badge badge-d">Agent D: News</span>
       </div>
     </header>
 
@@ -30,7 +33,7 @@
     <main class="chat-viewport" id="chatViewport">
       <div class="message system-message">
         <div class="message-content">
-          <strong>System Ready:</strong> Ask about live quotes (Agent A), visual chart trends (Agent B), or textbook strategies (Agent C). Caching and session memory are active.
+          <strong>System Ready:</strong> Ask about live quotes (Agent A), visual chart trends (Agent B), textbook rules (Agent C), or live news & trade setups (Agent D).
         </div>
       </div>
     </main>
@@ -41,7 +44,7 @@
         <input 
           type="text" 
           id="userInput" 
-          placeholder="Ask: 'What is Nifty live price?' or 'Plot 3-month trend'..." 
+          placeholder="Ask: 'Should I buy Call or Put today?' or 'What is Nifty price?'..." 
           autocomplete="off"
           required
         />
