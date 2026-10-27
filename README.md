@@ -1,21 +1,42 @@
 # Nifty 50 Multi-Agent System
 
-An intelligent multi-agent financial assistant powered by OpenAI multimodal models, SQLite dynamic querying, query-level caching, and session memory.
+An autonomous financial intelligence platform with decoupled **backend** (agents, SQLite, caching, session memory) and **frontend** (glassmorphic UI).
 
-## Architecture
+## Folder Structure
 
-- **Agent A (`agent_a.py`)**: Real-time ticker and market quotes fetched via Yahoo Finance (`fast_info`).
-- **Agent B (`agent_b.py`)**: Historical series aggregation, in-memory Matplotlib charting to Base64, and LLM Vision trend analysis (`gpt-4o-mini`).
-- **Agent C (`agent_c.py`)**: Literature retrieval agent citing principles from *Technical Analysis of the Financial Markets* by John J. Murphy.
-- **Router (`router.py`)**: Few-shot classifier routing queries directly to the designated agent without unnecessary model calls.
-- **Dynamic SQL Engine (`market_db.py`)**: Stores OHLCV records in SQLite and dynamically queries flexible columns (Open, High, Low, Close) and custom day windows.
-- **Cache Engine (`cache.py`)**: Normalizes input query hashes and provides sub-millisecond cached responses, saving LLM tokens.
-- **Session Manager (`session.py`)**: Multi-turn conversation sliding window memory.
+```
+nifty_multiagent_system/
+├── backend/
+│   ├── agent_a.py        # Live price & ticker quote engine (Yahoo Finance)
+│   ├── agent_b.py        # In-memory plotting to Base64 + LLM Vision (gpt-4o-mini)
+│   ├── agent_c.py        # Literature/book rule retrieval (John J. Murphy)
+│   ├── router.py         # Few-shot intent router (Agent A / B / C selector)
+│   ├── market_db.py      # SQLite storage & dynamic SQL engine (Open/Close, N days)
+│   ├── cache.py          # Normalized query cache (Zero token waste)
+│   ├── session.py        # Multi-turn conversation sliding window
+│   ├── app.py            # Main application runner & orchestration
+│   └── requirements.txt  # Backend Python dependencies
+├── frontend/
+│   ├── index.html        # Glassmorphic responsive dashboard
+│   ├── styles.css        # Google Antigravity dark glass theme
+│   └── app.js            # Client-side agent interaction logic
+├── .gitignore
+└── README.md
+```
 
-## Setup & Running
+## Running the Project
 
+### 1. Backend
 ```bash
+cd backend
 pip install -r requirements.txt
 export OPENAI_API_KEY="your-api-key"
 python app.py
+```
+
+### 2. Frontend
+Open `frontend/index.html` directly in your browser or serve using:
+```bash
+cd frontend
+python -m http.server 3000
 ```
