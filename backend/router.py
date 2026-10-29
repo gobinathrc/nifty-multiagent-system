@@ -1,4 +1,4 @@
-"""Few-Shot Agent Router with Historical Date Support."""
+"""Few-Shot Agent Router with Period Analysis Support."""
 
 from openai import OpenAI
 
@@ -11,17 +11,21 @@ def choose_agent(user_input: str, model: str = "gpt-4o-mini") -> str:
             "role": "system",
             "content": (
                 "Classify user query into exactly ONE token:\n"
-                "- AGENT_A: When asking for current live price, CMP, or today's tick numbers.\n"
-                "- AGENT_B: When asking to see or analyze a chart, graph, or visual plot.\n"
-                "- AGENT_C: When asking about textbook rules, definitions, indicators.\n"
-                "- AGENT_D: When asking for latest breaking news, market headlines, or macro events.\n"
-                "- HISTORICAL: When asking for yesterday's price, historical dates, or past 5-year values.\n"
-                "- ADVICE: When asking 'should I buy or sell', 'call or put', or trade decisions.\n"
+                "- AGENT_A: Only asking for current price, live CMP, or today's tick numbers.\n"
+                "- AGENT_B: Asking for trend analysis, 30-day/multi-day analysis, charts, or visual plots.\n"
+                "- AGENT_C: Asking about textbook rules, definitions, indicators.\n"
+                "- AGENT_D: Asking for latest breaking news, market headlines, or macro events.\n"
+                "- HISTORICAL: Asking for yesterday's price or a specific single past date (e.g. 2024-06-04).\n"
+                "- ADVICE: Asking 'should I buy or sell', 'call or put', or trade decisions.\n"
                 "Output ONLY the token: AGENT_A, AGENT_B, AGENT_C, AGENT_D, HISTORICAL, or ADVICE."
             ),
         },
         {"role": "user", "content": "What is the current price of Nifty right now?"},
         {"role": "assistant", "content": "AGENT_A"},
+        {"role": "user", "content": "give nifty 50 analysis of last 30 days"},
+        {"role": "assistant", "content": "AGENT_B"},
+        {"role": "user", "content": "analyze nifty trend for the past month"},
+        {"role": "assistant", "content": "AGENT_B"},
         {"role": "user", "content": "Show me the 3-month chart and visual trend."},
         {"role": "assistant", "content": "AGENT_B"},
         {"role": "user", "content": "What does Murphy's book say about moving averages?"},
@@ -30,12 +34,6 @@ def choose_agent(user_input: str, model: str = "gpt-4o-mini") -> str:
         {"role": "assistant", "content": "AGENT_D"},
         {"role": "user", "content": "what was nifty value yesterday?"},
         {"role": "assistant", "content": "HISTORICAL"},
-        {"role": "user", "content": "what was nifty close on 4th june 2024?"},
-        {"role": "assistant", "content": "HISTORICAL"},
-        {"role": "user", "content": "show me nifty price on 2023-01-15"},
-        {"role": "assistant", "content": "HISTORICAL"},
-        {"role": "user", "content": "should i buy ninfty toady should i call or put"},
-        {"role": "assistant", "content": "ADVICE"},
         {"role": "user", "content": "should i buy or sell nifty"},
         {"role": "assistant", "content": "ADVICE"},
         {"role": "user", "content": user_input},

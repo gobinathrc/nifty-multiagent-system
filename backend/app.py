@@ -55,7 +55,6 @@ def extract_target_date(user_input: str, client: OpenAI) -> str:
     if any(w in lower for w in ["yesterday", "previous day", "last session", "yesterday's"]):
         return "yesterday"
 
-    # Use LLM for natural date parsing (e.g. '4th june 2024' -> '2024-06-04')
     try:
         resp = client.chat.completions.create(
             model="gpt-4o-mini",
@@ -87,8 +86,8 @@ def chat_endpoint(req: ChatRequest):
     client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
     decision = choose_agent(user_input)
 
-    # 1. HISTORICAL DATE LOOKUP (Yesterday or any date in 5 years)
-    if "HISTORICAL" in decision or "yesterday" in user_input.lower():
+    # 1. HISTORICAL SINGLE-DAY LOOKUP (Yesterday or exact date)
+    if "HISTORICAL" in decision or ("yesterday" in user_input.lower() and "analysis" not in user_input.lower()):
         target_date = extract_target_date(user_input, client)
         record = get_nifty_by_date(target_date)
 
@@ -107,10 +106,29 @@ def chat_endpoint(req: ChatRequest):
         else:
             reply = f"Could not find historical trading data for '{target_date}'. Please specify a date within the last 5 years (e.g. 2024-06-04)."
 
-    # 2. TRADE DECISION / ADVICE (Buy vs Sell, Call vs Put)
+    # 2. MULTI-DAY / 30-DAY / PERIOD ANALYSIS (Agent B + Live Quote)
+    elif "AGENT_B" in decision or "analysis" in user_input.lower() or "trend" in user_input.lower():
+        # Detect timeframe requested (default 1mo for 30 days, or 3mo)
+        period = "1mo" if any(w in user_input.lower() for w in ["30 day", "30day", "1 month", "month", "last 30"]) else "3mo"
+        
+        # 1. Pull current live price from Agent A
+        quote = get_current_nifty_quote("^NSEI")
+        
+        # 2. Pull visual & technical trend from Agent B
+        trend_analysis = agent_b_chart_vision("^NSEI", period=period)
+        
+        reply = (
+            f"### Nifty 50: Current Price & {period.upper()} Analysis\n"
+            f"- **Live Price (CMP)**: ₹{quote['current_price']} ({quote['day_change_pct']}% today)\n"
+            f"- **Today's Intraday Range**: Low ₹{quote['day_low']} | High ₹{quote['day_high']}\n\n"
+            f"### Technical Trend Analysis (Agent B)\n"
+            f"{trend_analysis}"
+        )
+
+    # 3. TRADE DECISION / ADVICE (Buy vs Sell, Call vs Put)
     elif "ADVICE" in decision:
         quote = get_current_nifty_quote("^NSEI")
-        chart_analysis = agent_b_chart_vision("^NSEI")
+        chart_analysis = agent_b_chart_vision("^NSEI", period="1mo")
         live_news = get_live_market_news("^NSEI", max_items=4)
         news_text = format_news_for_prompt(live_news)
 
@@ -140,12 +158,12 @@ def chat_endpoint(req: ChatRequest):
         )
         reply = f"### Strategic Market Setup\n" + resp.choices[0].message.content.strip()
 
-    # 3. LATEST BREAKING NEWS (Agent D)
+    # 4. LATEST BREAKING NEWS (Agent D)
     elif "AGENT_D" in decision:
         news_items = get_live_market_news("^NSEI", max_items=5)
         reply = "### Latest Nifty 50 Breaking News & Catalysts\n" + format_news_for_prompt(news_items)
 
-    # 4. RAW LIVE QUOTE (Agent A)
+    # 5. RAW LIVE QUOTE (Agent A)
     elif "AGENT_A" in decision:
         quote = get_current_nifty_quote("^NSEI")
         reply = (
@@ -154,10 +172,6 @@ def chat_endpoint(req: ChatRequest):
             f"- **Day High**: ₹{quote['day_high']}\n"
             f"- **Day Low**: ₹{quote['day_low']}"
         )
-
-    # 5. VISUAL CHART ANALYSIS (Agent B)
-    elif "AGENT_B" in decision:
-        reply = f"### Agent B - Vision Plot\n" + agent_b_chart_vision("^NSEI")
 
     # 6. BOOK THEORY & CONCEPTS (Agent C)
     elif "AGENT_C" in decision:
@@ -170,7 +184,6 @@ def chat_endpoint(req: ChatRequest):
     return {"reply": reply, "source": decision}
 
 
-# Mount frontend static UI
 frontend_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend")
 if os.path.exists(frontend_dir):
     app.mount("/", StaticFiles(directory=frontend_dir, html=True), name="frontend")
