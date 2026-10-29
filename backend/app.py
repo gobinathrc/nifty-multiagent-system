@@ -1,4 +1,4 @@
-"""FastAPI Backend Server with News-Grounded Trade Strategy & Clean Formatting."""
+"""FastAPI Backend Server with 5-Year Historical Date Support & Multi-Agent Dispatch."""
 
 import os
 from fastapi import FastAPI
@@ -12,12 +12,14 @@ try:
     from backend.agent_b import agent_b_chart_vision
     from backend.agent_c import AgentC
     from backend.agent_news import get_live_market_news, format_news_for_prompt
+    from backend.market_db import init_database, get_nifty_by_date, query_market_sql
     from backend.router import choose_agent
 except ImportError:
     from agent_a import get_current_nifty_quote
     from agent_b import agent_b_chart_vision
     from agent_c import AgentC
     from agent_news import get_live_market_news, format_news_for_prompt
+    from market_db import init_database, get_nifty_by_date, query_market_sql
     from router import choose_agent
 
 app = FastAPI(title="Nifty Multi-Agent API")
@@ -33,14 +35,51 @@ app.add_middleware(
 agent_c_instance = AgentC()
 
 
+@app.on_event("startup")
+def on_startup():
+    """Initializes SQLite database with 5 years of historical data."""
+    try:
+        init_database(period="5y")
+    except Exception as e:
+        print(f"[Warning] Failed to initialize 5-year DB: {e}")
+
+
 class ChatRequest(BaseModel):
     message: str
     session_id: str = "default_session"
 
 
+def extract_target_date(user_input: str, client: OpenAI) -> str:
+    """Extracts target historical date as 'YYYY-MM-DD' or 'yesterday'."""
+    lower = user_input.lower()
+    if any(w in lower for w in ["yesterday", "previous day", "last session", "yesterday's"]):
+        return "yesterday"
+
+    # Use LLM for natural date parsing (e.g. '4th june 2024' -> '2024-06-04')
+    try:
+        resp = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "Extract the specific date requested by the user and convert to 'YYYY-MM-DD'. "
+                        "If referring to yesterday, output 'yesterday'. Output ONLY the date string."
+                    ),
+                },
+                {"role": "user", "content": user_input},
+            ],
+            max_tokens=15,
+            temperature=0.0,
+        )
+        return resp.choices[0].message.content.strip()
+    except Exception:
+        return "yesterday"
+
+
 @app.post("/api/chat")
 def chat_endpoint(req: ChatRequest):
-    """Dispatches to the requested agent or generates news-grounded trading advice."""
+    """Dispatches to the requested agent or retrieves historical date data."""
     user_input = req.message.strip()
     if not user_input:
         return {"reply": "Please enter a question.", "source": "error"}
@@ -48,8 +87,28 @@ def chat_endpoint(req: ChatRequest):
     client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
     decision = choose_agent(user_input)
 
-    # 1. TRADE DECISION / ADVICE (Buy vs Sell, Call vs Put)
-    if "ADVICE" in decision:
+    # 1. HISTORICAL DATE LOOKUP (Yesterday or any date in 5 years)
+    if "HISTORICAL" in decision or "yesterday" in user_input.lower():
+        target_date = extract_target_date(user_input, client)
+        record = get_nifty_by_date(target_date)
+
+        if record:
+            sign = "+" if record["change"] >= 0 else ""
+            reply = (
+                f"### Nifty 50 Historical Data: {record['date']}\n"
+                f"- **Closing Price**: ₹{record['close']:,} ({sign}{record['change']} | {sign}{record['change_pct']}%)\n"
+                f"- **Opening Price**: ₹{record['open']:,}\n"
+                f"- **Day High**: ₹{record['high']:,}\n"
+                f"- **Day Low**: ₹{record['low']:,}\n"
+                f"- **Total Volume**: {record['volume']:,}\n"
+                f"- **Previous Session Close**: ₹{record['previous_close']:,}\n\n"
+                f"_{record['note']}_"
+            )
+        else:
+            reply = f"Could not find historical trading data for '{target_date}'. Please specify a date within the last 5 years (e.g. 2024-06-04)."
+
+    # 2. TRADE DECISION / ADVICE (Buy vs Sell, Call vs Put)
+    elif "ADVICE" in decision:
         quote = get_current_nifty_quote("^NSEI")
         chart_analysis = agent_b_chart_vision("^NSEI")
         live_news = get_live_market_news("^NSEI", max_items=4)
@@ -81,12 +140,12 @@ def chat_endpoint(req: ChatRequest):
         )
         reply = f"### Strategic Market Setup\n" + resp.choices[0].message.content.strip()
 
-    # 2. LATEST BREAKING NEWS (Agent D)
+    # 3. LATEST BREAKING NEWS (Agent D)
     elif "AGENT_D" in decision:
         news_items = get_live_market_news("^NSEI", max_items=5)
         reply = "### Latest Nifty 50 Breaking News & Catalysts\n" + format_news_for_prompt(news_items)
 
-    # 3. RAW LIVE QUOTE (Agent A)
+    # 4. RAW LIVE QUOTE (Agent A)
     elif "AGENT_A" in decision:
         quote = get_current_nifty_quote("^NSEI")
         reply = (
@@ -96,11 +155,11 @@ def chat_endpoint(req: ChatRequest):
             f"- **Day Low**: ₹{quote['day_low']}"
         )
 
-    # 4. VISUAL CHART ANALYSIS (Agent B)
+    # 5. VISUAL CHART ANALYSIS (Agent B)
     elif "AGENT_B" in decision:
         reply = f"### Agent B - Vision Plot\n" + agent_b_chart_vision("^NSEI")
 
-    # 5. BOOK THEORY & CONCEPTS (Agent C)
+    # 6. BOOK THEORY & CONCEPTS (Agent C)
     elif "AGENT_C" in decision:
         reply = f"### Agent C - Book Theory\n" + agent_c_instance.consult_book(user_input)
 

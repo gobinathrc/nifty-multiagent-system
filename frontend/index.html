@@ -26,6 +26,7 @@
         <span class="badge badge-b">Agent B: Vision</span>
         <span class="badge badge-c">Agent C: Theory</span>
         <span class="badge badge-d">Agent D: News</span>
+        <span class="badge badge-hist">5Y History</span>
       </div>
     </header>
 
@@ -33,7 +34,7 @@
     <main class="chat-viewport" id="chatViewport">
       <div class="message system-message">
         <div class="message-content">
-          <strong>System Ready:</strong> Ask about live quotes (Agent A), visual chart trends (Agent B), textbook rules (Agent C), or live news & trade setups (Agent D).
+          <strong>System Ready:</strong> Ask about live quotes (Agent A), visual chart trends (Agent B), textbook rules (Agent C), live breaking news (Agent D), or <strong>yesterday's price & any past date across 5 years</strong>.
         </div>
       </div>
     </main>
@@ -44,7 +45,7 @@
         <input 
           type="text" 
           id="userInput" 
-          placeholder="Ask: 'Should I buy Call or Put today?' or 'What is Nifty price?'..." 
+          placeholder="Ask: 'Nifty value yesterday' or 'Nifty price on 2024-06-04'..." 
           autocomplete="off"
           required
         />
